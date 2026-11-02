@@ -1,12 +1,11 @@
 
-name: Build and Deploy Sek Sek Sekerek
+name: Deploy Flutter Web to GitHub Pages
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - 'Sek_Sek_Sekerek_Safari_Kaynak.zip'
-      - '.github/workflows/deploy.yml'
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -30,39 +29,48 @@ jobs:
         with:
           channel: stable
 
-      - name: Extract game
-        shell: bash
+      - name: Extract Safari source ZIP
         run: |
           mkdir extracted
           unzip -q Sek_Sek_Sekerek_Safari_Kaynak.zip -d extracted
 
+      - name: Find Flutter project
+        run: |
           PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
-
           if [ -z "$PROJECT_DIR" ]; then
-            echo "Flutter project not found"
+            echo "pubspec.yaml bulunamadi"
             exit 1
           fi
-
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Configure Flutter Web
+        run: |
+          cd "$PROJECT_DIR"
+          flutter create . --platforms web
+
+      - name: Get dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
 
       - name: Build Web
         run: |
           cd "$PROJECT_DIR"
-          flutter pub get
           flutter build web --release --base-href "/${GITHUB_REPOSITORY##*/}/"
 
-      - name: Upload website
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ env.PROJECT_DIR }}/build/web
 
   deploy:
-    needs: build
-    runs-on: ubuntu-latest
-
     environment:
       name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
 
     steps:
-      - name: Deploy
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
