@@ -1,1 +1,68 @@
-There was an error committing your changes: A file with the same name already exists. Please choose a different name and try again.
+
+name: Build and Deploy Sek Sek Sekerek
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Sek_Sek_Sekerek_Safari_Kaynak.zip'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Extract game
+        shell: bash
+        run: |
+          mkdir extracted
+          unzip -q Sek_Sek_Sekerek_Safari_Kaynak.zip -d extracted
+
+          PROJECT_DIR=$(find extracted -name pubspec.yaml -printf '%h\n' | head -n 1)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Flutter project not found"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Build Web
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
+          flutter build web --release --base-href "/${GITHUB_REPOSITORY##*/}/"
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.PROJECT_DIR }}/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+
+    steps:
+      - name: Deploy
+        uses: actions/deploy-pages@v4
